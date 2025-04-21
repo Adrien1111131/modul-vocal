@@ -375,13 +375,23 @@ const addBreathingAndPauses = (text: string, emotion: string, analysis: TextAnal
   });
   text = text.replace(/,/g, `,<break time="${pauseDuration * 0.7}ms"/> `);
 
-  // Respirations plus profondes pour les mots sensuels
+  // Respirations plus profondes pour les mots sensuels et interjections
   const breathingWords = /(gémis|soupir|souffle|caresse|frisson|désir|plaisir|extase)/gi;
+  const interjections = /(a+h+|m+h+|o+h+|h+a+h+|o+u+i+)/gi;
+  
   text = text.replace(breathingWords, (match) => {
     const intensity = analysis.intensity > 0.6 ? 'x-strong' :
                      analysis.intensity > 0.3 ? 'strong' :
                      breathIntensity;
     return `<break strength="${intensity}"/> ${match}`;
+  });
+
+  // Ralentir considérablement les interjections et ajouter des pauses
+  text = text.replace(interjections, (match) => {
+    const isUpperCase = match === match.toUpperCase();
+    const intensity = isUpperCase ? 'x-strong' : 'strong';
+    const rate = isUpperCase ? '25%' : '30%';
+    return `<break time="300ms"/><prosody rate="${rate}">${match}</prosody><break time="300ms"/>`;
   });
 
   // Variations contextuelles plus prononcées avec débit ralenti
@@ -570,10 +580,11 @@ export const generateVoice = async (text: string): Promise<string> => {
 
     const processedText = segments
       .map((segment, index) => {
-        // Appliquer les variations de base en fonction de l'émotion avec débit très ralenti
-        const baseRate = segment.emotion === 'murmure' ? '55%' : // Extrêmement ralenti
-                        segment.emotion === 'intense' ? '65%' :  // Très ralenti
-                        '60%';                                   // Débit de base très ralenti
+        // Appliquer les variations de base en fonction de l'émotion avec débit extrêmement ralenti
+        const baseRate = segment.emotion === 'murmure' ? '45%' :    // Extrêmement ralenti
+                        segment.emotion === 'intense' ? '40%' :     // Extrêmement ralenti pour l'intensité
+                        segment.emotion === 'jouissance' ? '35%' :  // Le plus lent pour la jouissance
+                        '50%';                                      // Débit de base très ralenti
         
         // Ajuster la hauteur pour plus de profondeur
         const basePitch = segment.emotion === 'murmure' ? '-25%' : // Plus grave
