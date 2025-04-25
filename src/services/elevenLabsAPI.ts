@@ -1,6 +1,7 @@
 import axiosInstance from './axiosConfig';
 import axios from 'axios';
 import { config, logger } from '../config/development';
+import { analyzeTextEnvironments, mapEnvironmentToSounds, EnvironmentDetection } from './openAIService';
 
 const VOICE_ID = import.meta.env.VITE_ELEVENLABS_VOICE_ID || '';
 const API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
@@ -565,6 +566,103 @@ const parseTextSegments = (text: string): TextSegment[] => {
   logger.debug('Segments générés:', segments);
   logger.groupEnd();
   return segments;
+};
+
+// Nouvelle fonction qui utilise OpenAI pour analyser le texte et ajouter des sons d'environnement
+export const generateVoiceWithEnvironment = async (text: string, useAI: boolean = false): Promise<string> => {
+  try {
+    logger.group('Génération de la voix avec environnement');
+    logger.info('Début de l\'analyse avec OpenAI pour le texte:', text);
+    
+    // Analyser le texte avec OpenAI pour détecter les environnements
+    const environmentDetections = await analyzeTextEnvironments(text);
+    logger.debug('Environnements détectés:', environmentDetections);
+    
+    // Construire le SSML avec les sons d'environnement
+    let ssmlWithEnvironment = '<speak>';
+    
+    for (const detection of environmentDetections) {
+      // Obtenir les sons pour cet environnement
+      const sounds = mapEnvironmentToSounds(detection.environment);
+      logger.debug(`Sons pour l'environnement "${detection.environment}":`, sounds);
+      
+      // Ajouter les sons d'ambiance
+      if (sounds.length > 0) {
+        // Ajouter le son principal en arrière-plan
+        ssmlWithEnvironment += `<ambient-sound name="${sounds[0]}" volume="0.3" fade-in="2s" fade-out="2s">`;
+        
+        // Ajouter le texte avec les paramètres vocaux adaptés
+        const emotionalTone = detection.emotionalTone || 'sensuel';
+        const speechRate = detection.speechRate === 'très lent' ? '35%' :
+                          detection.speechRate === 'lent' ? '45%' :
+                          detection.speechRate === 'modéré' ? '55%' :
+                          detection.speechRate === 'rapide' ? '65%' :
+                          '50%';
+        const volume = detection.volume === 'doux' ? '-2dB' :
+                      detection.volume === 'fort' ? '+4dB' :
+                      '+0dB';
+        
+        ssmlWithEnvironment += `<prosody rate="${speechRate}" volume="${volume}">${detection.segment}</prosody>`;
+        
+        // Fermer la balise de son d'ambiance
+        ssmlWithEnvironment += '</ambient-sound>';
+        
+        // Ajouter des sons ponctuels si disponibles
+        if (sounds.length > 1) {
+          ssmlWithEnvironment += `<audio src="${sounds[1]}" />`;
+        }
+      } else {
+        // Pas de son d'ambiance, ajouter simplement le texte
+        ssmlWithEnvironment += detection.segment;
+      }
+      
+      // Ajouter une pause entre les segments
+      ssmlWithEnvironment += '<break time="500ms"/>';
+    }
+    
+    ssmlWithEnvironment += '</speak>';
+    logger.debug('SSML avec environnement:', ssmlWithEnvironment);
+    
+    // Envoyer le SSML à l'API ElevenLabs
+    const response = await axiosInstance.post(
+      API_URL,
+      {
+        text: ssmlWithEnvironment,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.8
+        }
+      },
+      {
+        headers: {
+          'xi-api-key': API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
+        responseType: 'blob',
+        timeout: config.api.timeout
+      }
+    );
+    
+    logger.info('Réponse reçue de l\'API');
+    const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    logger.debug('URL audio générée:', audioUrl);
+    
+    logger.groupEnd();
+    return audioUrl;
+  } catch (error: unknown) {
+    logger.error('Erreur lors de la génération de la voix avec environnement:', error);
+    if (axios.isAxiosError(error)) {
+      logger.error('Réponse de l\'API:', error.response?.data);
+      logger.error('Status:', error.response?.status);
+      logger.error('Headers:', error.response?.headers);
+    }
+    // En cas d'erreur, utiliser la méthode standard
+    logger.info('Utilisation de la méthode standard comme fallback');
+    return generateVoice(text);
+  }
 };
 
 export const generateVoice = async (text: string): Promise<string> => {

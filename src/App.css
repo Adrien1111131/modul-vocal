@@ -119,6 +119,29 @@
   color: #666;
 }
 
+.ai-toggle {
+  background-color: white;
+  padding: 1.2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
+}
+
+.ai-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 1rem;
+  color: #333;
+  cursor: pointer;
+}
+
+.ai-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .generate-button {
   padding: 1rem 2rem;
   font-size: 1.1rem;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EmotionSelector from './components/EmotionSelector';
 import TextInput from './components/TextInput';
 import VoicePlayer from './components/VoicePlayer';
-import { generateVoice } from './services/elevenLabsAPI';
+import { generateVoice, generateVoiceWithEnvironment } from './services/elevenLabsAPI';
 import { logger } from './config/development';
 import './App.css';
 
@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useAI, setUseAI] = useState(false);
 
   useEffect(() => {
     logger.group('État de l\'application');
@@ -20,10 +21,11 @@ const App: React.FC = () => {
       selectedEmotion,
       audioUrl,
       isLoading,
-      error
+      error,
+      useAI
     });
     logger.groupEnd();
-  }, [inputText, selectedEmotion, audioUrl, isLoading, error]);
+  }, [inputText, selectedEmotion, audioUrl, isLoading, error, useAI]);
 
   const handleTextChange = (text: string) => {
     logger.debug('Changement de texte:', text);
@@ -37,10 +39,16 @@ const App: React.FC = () => {
     setError(null);
   };
 
+  const handleToggleAI = () => {
+    setUseAI(!useAI);
+    logger.debug('Utilisation de l\'IA pour l\'analyse:', !useAI);
+  };
+
   const handleGenerateVoice = async () => {
     logger.group('Génération de la voix');
     logger.info('Début de la génération');
     logger.debug('Texte actuel:', inputText);
+    logger.debug('Utilisation de l\'IA:', useAI);
     
     if (!inputText.trim()) {
       const errorMsg = "Veuillez entrer du texte avant de générer la voix";
@@ -61,7 +69,16 @@ const App: React.FC = () => {
       
       logger.debug('Texte avec émotions:', textWithEmotion);
 
-      const url = await generateVoice(textWithEmotion);
+      let url;
+      if (useAI) {
+        // Utiliser l'analyse OpenAI et les sons d'environnement
+        logger.info('Utilisation de l\'analyse OpenAI et des sons d\'environnement');
+        url = await generateVoiceWithEnvironment(textWithEmotion, true);
+      } else {
+        // Utiliser la méthode standard
+        url = await generateVoice(textWithEmotion);
+      }
+      
       logger.info('URL audio reçue:', url);
       
       // Vérifier que l'URL est valide
@@ -96,6 +113,17 @@ const App: React.FC = () => {
         <div className="controls-section">
           <EmotionSelector onEmotionChange={handleEmotionChange} />
           <TextInput onTextChange={handleTextChange} />
+          <div className="ai-toggle">
+            <label>
+              <input
+                type="checkbox"
+                checked={useAI}
+                onChange={handleToggleAI}
+                disabled={isLoading}
+              />
+              Utiliser l'IA pour analyser le texte et ajouter des sons d'environnement
+            </label>
+          </div>
           <button 
             onClick={handleGenerateVoice}
             disabled={isLoading || !inputText.trim()}
