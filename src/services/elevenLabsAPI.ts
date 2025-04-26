@@ -503,64 +503,42 @@ const calculateEmotionTransitionDuration = (currentEmotion: string, nextEmotion:
   return transitionMap[currentEmotion]?.[nextEmotion] || 500;
 };
 
-const parseTextSegments = (text: string): TextSegment[] => {
+const parseTextSegments = async (text: string): Promise<TextSegment[]> => {
   logger.group('Parsing des segments');
   logger.debug('Texte à parser:', text);
   
   const segments: TextSegment[] = [];
-  const regex = /\[(\w+)\](.*?)\[\/\1\]|([^\[\]]+)/g;
-  const matches: { emotion: string; content: string; isTagged: boolean }[] = [];
-  let match;
+  
+  // Utiliser l'analyse de Grok pour obtenir les segments et leurs émotions
+  const environmentDetections = await analyzeTextEnvironments(text);
+  
+  // Convertir les détections en segments
+  environmentDetections.forEach((detection, i) => {
+    const analysis = analyzeText(detection.segment);
+    const { markers, contexts } = extractIntonationMarkers(detection.segment);
 
-  // Première passe : collecter tous les segments
-  while ((match = regex.exec(text)) !== null) {
-    if (match[1] && match[2]) {
-      matches.push({
-        emotion: match[1],
-        content: match[2].trim(),
-        isTagged: true
-      });
-    } else if (match[3]) {
-      const content = match[3].trim();
-      if (content) {
-        matches.push({
-          emotion: 'sensuel',
-          content,
-          isTagged: false
-        });
-      }
+    // Créer le contexte du segment
+    const segmentContext: SegmentContext = {
+      previousEmotion: i > 0 ? environmentDetections[i - 1].emotionalTone : undefined,
+      nextEmotion: i < environmentDetections.length - 1 ? environmentDetections[i + 1].emotionalTone : undefined,
+      transitionDuration: i < environmentDetections.length - 1 ? 
+        calculateEmotionTransitionDuration(detection.emotionalTone, environmentDetections[i + 1].emotionalTone) : undefined
+    };
+
+    // Ajuster l'analyse en fonction du contexte
+    if (segmentContext.previousEmotion) {
+      analysis.emotionalProgression *= 1.2;
     }
-  }
 
-  // Deuxième passe : analyser et créer les segments avec contexte
-  matches.forEach((m, i) => {
-    if (m.content) {
-      const analysis = analyzeText(m.content);
-      const { markers, contexts } = extractIntonationMarkers(m.content);
-
-      // Créer le contexte du segment
-      const segmentContext: SegmentContext = {
-        previousEmotion: i > 0 ? matches[i - 1].emotion : undefined,
-        nextEmotion: i < matches.length - 1 ? matches[i + 1].emotion : undefined,
-        transitionDuration: i < matches.length - 1 ? 
-          calculateEmotionTransitionDuration(m.emotion, matches[i + 1].emotion) : undefined
-      };
-
-      // Ajuster l'analyse en fonction du contexte
-      if (segmentContext.previousEmotion) {
-        analysis.emotionalProgression *= 1.2; // Augmenter la progression émotionnelle pour les transitions
-      }
-
-      // Créer le segment avec les informations de contexte
-      segments.push({
-        text: m.content,
-        emotion: m.emotion,
-        analysis,
-        intonationMarkers: markers,
-        context: segmentContext,
-        intonationContexts: contexts
-      });
-    }
+    // Créer le segment avec les informations de contexte
+    segments.push({
+      text: detection.segment,
+      emotion: detection.emotionalTone,
+      analysis,
+      intonationMarkers: markers,
+      context: segmentContext,
+      intonationContexts: contexts
+    });
   });
 
   logger.debug('Segments générés:', segments);
@@ -670,8 +648,12 @@ export const generateVoice = async (text: string): Promise<string> => {
     logger.group('Génération de la voix');
     logger.info('Début de la génération pour le texte:', text);
     
-    const segments = parseTextSegments(text);
+    const segments = await parseTextSegments(text);
     logger.debug('Segments analysés:', segments);
+
+    if (segments.length === 0) {
+      throw new Error('Aucun segment n\'a été généré');
+    }
 
     const firstSegment = segments[0];
     const settings = getVoiceSettings(firstSegment.emotion, firstSegment.analysis);

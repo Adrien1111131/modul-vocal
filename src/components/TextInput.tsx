@@ -45,11 +45,11 @@ const TextInput: React.FC<TextInputProps> = ({ onTextChange }) => {
         value={inputText}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder="Écrivez votre texte ici... Utilisez les balises pour indiquer le ton.
+        placeholder="Écrivez votre texte ici... L'IA analysera automatiquement le ton et l'émotion de votre texte.
 Exemple:
-[sensuel]Je sens mon corps frémir[/sensuel]
-[murmure]Viens plus près de moi[/murmure]
-[intense]Je ne peux plus résister[/intense]"
+Je sens mon corps frémir sous tes caresses...
+Viens plus près de moi, murmure-t-il doucement
+Je ne peux plus résister, l'intensité me submerge !"
         rows={15}
         className="text-input"
         spellCheck={false}
@@ -58,18 +58,16 @@ Exemple:
         autoCapitalize="off"
       />
       <div className="text-input-help">
-        <h4>Guide d'utilisation des balises :</h4>
+        <h4>Guide d'écriture :</h4>
         <ul>
-          <li>[sensuel] pour un ton sensuel et séduisant</li>
-          <li>[excite] pour un ton excité et passionné</li>
-          <li>[jouissance] pour un ton d'extase</li>
-          <li>[murmure] pour un ton doux et intime</li>
-          <li>[intense] pour un ton intense et profond</li>
-          <li>[doux] pour un ton tendre et délicat</li>
+          <li>Utilisez un vocabulaire expressif pour transmettre les émotions</li>
+          <li>Variez l'intensité avec des mots comme "doucement", "passionnément", "intensément"</li>
+          <li>Décrivez l'environnement pour créer l'ambiance</li>
+          <li>Exprimez les sensations et les émotions naturellement</li>
         </ul>
         <p className="text-input-tip">
           Utilisez les points de suspension (...) pour créer des pauses naturelles dans le texte.<br/>
-          Les balises peuvent être combinées pour varier les tons au fil du texte.
+          L'IA analysera automatiquement le ton émotionnel et adaptera la voix en conséquence.
         </p>
       </div>
     </div>
