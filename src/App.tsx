@@ -62,21 +62,17 @@ const App: React.FC = () => {
       setIsLoading(true);
       setError(null);
       
-      // Si le texte n'a pas de balises d'émotion, on ajoute l'émotion sélectionnée
-      const textWithEmotion = inputText.match(/\[\w+\]/) 
-        ? inputText 
-        : `[${selectedEmotion}]${inputText}[/${selectedEmotion}]`;
-      
-      logger.debug('Texte avec émotions:', textWithEmotion);
+      // Utiliser directement le texte brut sans ajouter de balises
+      logger.debug('Analyse du texte par Grok:', inputText);
 
       let url;
       if (useAI) {
-        // Utiliser l'analyse OpenAI et les sons d'environnement
-        logger.info('Utilisation de l\'analyse OpenAI et des sons d\'environnement');
-        url = await generateVoiceWithEnvironment(textWithEmotion, true);
+        // Utiliser l'analyse Grok et les sons d'environnement
+        logger.info('Utilisation de l\'analyse Grok et des sons d\'environnement');
+        url = await generateVoiceWithEnvironment(inputText, true);
       } else {
-        // Utiliser la méthode standard
-        url = await generateVoice(textWithEmotion);
+        // Utiliser la méthode standard avec analyse Grok
+        url = await generateVoice(inputText);
       }
       
       logger.info('URL audio reçue:', url);

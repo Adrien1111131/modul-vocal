@@ -38,8 +38,8 @@ const EmotionSelector: React.FC<EmotionSelectorProps> = ({ onEmotionChange }) =>
         ))}
       </select>
       <p className="emotion-help">
-        Utilisez les balises pour changer le ton dans votre texte.<br/>
-        Exemple: [sensuel]Je te désire[/sensuel] [murmure]viens plus près[/murmure]
+        Cette émotion sera utilisée comme ton par défaut si l'IA ne détecte pas d'émotion spécifique.<br/>
+        L'IA analysera automatiquement le texte pour détecter les variations d'émotions.
       </p>
     </div>
   );
