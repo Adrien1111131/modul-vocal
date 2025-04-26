@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import EmotionSelector from './components/EmotionSelector';
 import TextInput from './components/TextInput';
 import VoicePlayer from './components/VoicePlayer';

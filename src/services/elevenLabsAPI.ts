@@ -1,7 +1,7 @@
 import axiosInstance from './axiosConfig';
 import axios from 'axios';
 import { config, logger } from '../config/development';
-import { analyzeTextEnvironments, mapEnvironmentToSounds, EnvironmentDetection } from './openAIService';
+import { analyzeTextEnvironments, mapEnvironmentToSounds, EnvironmentDetection } from './grokService';
 
 const VOICE_ID = import.meta.env.VITE_ELEVENLABS_VOICE_ID || '';
 const API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
