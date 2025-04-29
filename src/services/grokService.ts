@@ -2,7 +2,7 @@ import axios from 'axios';
 import { config, logger } from '../config/development';
 
 const API_KEY = import.meta.env.VITE_GROK_API_KEY || '';
-const API_URL = 'https://api.x.ai/v1/chat/completions';
+const API_URL = 'https://api.x.ai/grok/v1/chat/completions';
 
 // Vérification de la présence de la clé API
 if (!API_KEY) {
@@ -17,7 +17,58 @@ export interface EnvironmentDetection {
   emotionalTone: string;
   speechRate: string;
   volume: string;
+  startTime?: number;
+  duration?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  transition?: {
+    type: 'crossfade' | 'cut' | 'overlap';
+    duration: number;
+  };
 }
+
+interface TimingInfo {
+  estimatedDuration: number;
+  fadeIn: number;
+  fadeOut: number;
+  transitionType: 'crossfade' | 'cut' | 'overlap';
+  transitionDuration: number;
+}
+
+const calculateTiming = (text: string, speechRate: string): TimingInfo => {
+  // Estimation de la durée basée sur le nombre de mots et le débit
+  const words = text.trim().split(/\s+/).length;
+  const wordsPerSecond = speechRate === 'très lent' ? 1.0 :
+                        speechRate === 'lent' ? 1.5 :
+                        speechRate === 'modéré' ? 2.0 :
+                        2.5; // rapide
+  
+  const estimatedDuration = words / wordsPerSecond;
+  
+  // Durées de fondu basées sur la longueur du segment
+  const fadeIn = Math.min(1.0, estimatedDuration * 0.1);
+  const fadeOut = Math.min(1.0, estimatedDuration * 0.1);
+  
+  // Type de transition basé sur le contexte
+  const hasEllipsis = text.includes('...');
+  const endsWithPunctuation = /[.!?]$/.test(text.trim());
+  
+  const transitionType = hasEllipsis ? 'crossfade' :
+                        endsWithPunctuation ? 'cut' :
+                        'overlap';
+  
+  const transitionDuration = transitionType === 'crossfade' ? 1.0 :
+                            transitionType === 'overlap' ? 0.5 :
+                            0.2;
+  
+  return {
+    estimatedDuration,
+    fadeIn,
+    fadeOut,
+    transitionType,
+    transitionDuration
+  };
+};
 
 /**
  * Analyse un texte pour détecter les environnements et les émotions
@@ -26,69 +77,108 @@ export interface EnvironmentDetection {
  */
 export const analyzeTextEnvironments = async (text: string): Promise<EnvironmentDetection[]> => {
   try {
-    logger.group('Analyse du texte avec Grok');
+    logger.group('Analyse du texte (locale)');
     logger.info('Début de l\'analyse pour le texte:', text);
 
-    const prompt = `
-    Analyse ce texte et identifie pour chaque paragraphe ou segment naturel :
-    1. L'environnement ou le cadre de la scène (ex: plage, forêt, chambre, etc.)
-    2. Les effets sonores qui correspondraient à cet environnement
-    3. Le ton émotionnel dominant (sensuel, intense, jouissance, murmure, etc.)
-    4. Le débit de parole recommandé (très lent, lent, modéré, rapide)
-    5. Le volume recommandé (doux, normal, fort)
-
-    Réponds au format JSON avec cette structure exacte :
-    {
-      "segments": [
-        {
-          "segment": "texte du segment",
-          "environment": "nom de l'environnement",
-          "soundEffects": ["son1", "son2"],
-          "emotionalTone": "ton émotionnel",
-          "speechRate": "débit de parole",
-          "volume": "volume"
-        }
-      ]
-    }
-
-    N'inclus aucun autre texte dans ta réponse, seulement le JSON.
-    `;
-
-    const response = await axios.post(
-      API_URL,
-      {
-        messages: [
-          { role: 'system', content: 'Tu es un assistant spécialisé dans l\'analyse de textes érotiques pour la génération audio.' },
-          { role: 'user', content: prompt + '\n\nTexte à analyser:\n' + text }
-        ],
-        model: 'grok-3-latest',
-        stream: false,
-        temperature: 0
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        }
+    // Diviser le texte en paragraphes
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+    
+    // Si pas de paragraphes, considérer le texte entier comme un segment
+    const segments = paragraphs.length > 0 ? paragraphs : [text];
+    
+    // Créer un résultat par défaut pour chaque segment
+    let results: EnvironmentDetection[] = segments.map(segment => {
+      // Analyse simple pour déterminer l'environnement et l'émotion
+      let environment = 'chambre';
+      let emotionalTone = 'sensuel';
+      
+      // Mots-clés pour détecter l'environnement
+      if (segment.toLowerCase().includes('plage') || segment.toLowerCase().includes('mer') || segment.toLowerCase().includes('vague')) {
+        environment = 'plage';
+      } else if (segment.toLowerCase().includes('forêt') || segment.toLowerCase().includes('bois') || segment.toLowerCase().includes('arbre')) {
+        environment = 'forêt';
+      } else if (segment.toLowerCase().includes('pluie') || segment.toLowerCase().includes('orage')) {
+        environment = 'pluie';
+      } else if (segment.toLowerCase().includes('ville') || segment.toLowerCase().includes('rue')) {
+        environment = 'ville';
       }
-    );
+      
+      // Mots-clés pour détecter l'émotion
+      if (segment.toLowerCase().includes('gémis') || segment.toLowerCase().includes('soupir') || segment.toLowerCase().includes('excit')) {
+        emotionalTone = 'excite';
+      } else if (segment.toLowerCase().includes('extase') || segment.toLowerCase().includes('jouir') || segment.toLowerCase().includes('orgasme')) {
+        emotionalTone = 'jouissance';
+      } else if (segment.toLowerCase().includes('murmure') || segment.toLowerCase().includes('chuchot')) {
+        emotionalTone = 'murmure';
+      } else if (segment.toLowerCase().includes('fort') || segment.toLowerCase().includes('intense') || segment.toLowerCase().includes('violent')) {
+        emotionalTone = 'intense';
+      } else if (segment.toLowerCase().includes('doux') || segment.toLowerCase().includes('tendre')) {
+        emotionalTone = 'doux';
+      }
+      
+      return {
+        segment,
+        environment,
+        soundEffects: mapEnvironmentToSounds(environment),
+        emotionalTone,
+        speechRate: 'lent',
+        volume: 'normal'
+      };
+    });
 
-    const content = response.data.choices[0].message.content;
-    if (!content) {
-      throw new Error('Réponse vide de l\'API Grok');
-    }
+    // Ajouter les informations de timing pour chaque segment
+    let currentTime = 0;
+    results = results.map((segment: EnvironmentDetection, index: number) => {
+      const timing = calculateTiming(segment.segment, segment.speechRate);
+      
+      // Ajouter les informations de timing au segment
+      const enhancedSegment = {
+        ...segment,
+        startTime: currentTime,
+        duration: timing.estimatedDuration,
+        fadeIn: timing.fadeIn,
+        fadeOut: timing.fadeOut,
+        transition: {
+          type: timing.transitionType,
+          duration: timing.transitionDuration
+        }
+      };
+      
+      // Mettre à jour le temps de début pour le prochain segment
+      currentTime += timing.estimatedDuration;
+      if (timing.transitionType === 'crossfade' && index < results.length - 1) {
+        currentTime -= timing.transitionDuration;
+      }
+      
+      return enhancedSegment;
+    });
 
-    // Parsing de la réponse JSON
-    const parsedResponse = JSON.parse(content);
-    const results = parsedResponse.segments || [];
-
-    logger.debug('Résultats de l\'analyse:', results);
+    logger.debug('Résultats de l\'analyse locale avec timing:', results);
     logger.groupEnd();
 
     return results;
   } catch (error) {
-    logger.error('Erreur lors de l\'analyse du texte avec Grok:', error);
-    throw new Error('Échec de l\'analyse du texte');
+    logger.error('Erreur lors de l\'analyse locale du texte:', error);
+    
+    // En cas d'erreur, retourner un segment par défaut
+    const defaultSegment: EnvironmentDetection = {
+      segment: text,
+      environment: 'chambre',
+      soundEffects: ['bedroom_ambience.mp3'],
+      emotionalTone: 'sensuel',
+      speechRate: 'lent',
+      volume: 'normal',
+      startTime: 0,
+      duration: 10,
+      fadeIn: 0.5,
+      fadeOut: 0.5,
+      transition: {
+        type: 'crossfade',
+        duration: 0.5
+      }
+    };
+    
+    return [defaultSegment];
   }
 };
 
