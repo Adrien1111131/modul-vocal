@@ -69,6 +69,39 @@ class AudioMixerService {
     }
   }
 
+  private normalizeBuffer(buffer: AudioBuffer, targetLevel: number = 0.9): void {
+    // Trouver la valeur maximale dans le buffer
+    let maxValue = 0;
+    
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < channelData.length; i++) {
+        const absValue = Math.abs(channelData[i]);
+        if (absValue > maxValue) {
+          maxValue = absValue;
+        }
+      }
+    }
+    
+    // Si le niveau maximum est déjà inférieur à la cible, pas besoin de normaliser
+    if (maxValue <= targetLevel) {
+      logger.debug('Pas besoin de normalisation, niveau maximum:', maxValue);
+      return;
+    }
+    
+    // Calculer le facteur de gain pour atteindre le niveau cible
+    const gainFactor = targetLevel / maxValue;
+    logger.debug('Normalisation avec facteur de gain:', gainFactor);
+    
+    // Appliquer le gain à tous les échantillons
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < channelData.length; i++) {
+        channelData[i] *= gainFactor;
+      }
+    }
+  }
+
   public async mixAudioSegments(segments: AudioSegment[]): Promise<MixedAudioResult> {
     if (!this.audioContext) {
       throw new Error('Contexte audio non initialisé');
@@ -83,19 +116,108 @@ class AudioMixerService {
         throw new Error('Aucun segment audio à mixer');
       }
 
-      // Solution simplifiée : utiliser directement le premier segment audio
-      logger.info('Utilisation directe du premier segment audio');
-      const firstSegment = segments[0];
+      // Si un seul segment, retourner directement son URL
+      if (segments.length === 1) {
+        logger.info('Un seul segment audio, pas besoin de mixage');
+        const segment = segments[0];
+        logger.info('URL audio utilisée:', segment.audioUrl);
+        logger.info('Mixage terminé avec succès');
+        logger.groupEnd();
+        return {
+          audioUrl: segment.audioUrl,
+          duration: segment.duration,
+          segments: [segment]
+        };
+      }
+
+      // Trier les segments par temps de début
+      segments.sort((a, b) => a.startTime - b.startTime);
       
-      // Retourner directement l'URL du premier segment
-      logger.info('URL audio utilisée:', firstSegment.audioUrl);
+      // Calculer la durée totale
+      const totalDuration = segments.reduce((max, segment) => {
+        return Math.max(max, segment.startTime + segment.duration);
+      }, 0);
+      
+      logger.info('Durée totale calculée:', totalDuration);
+
+      // Créer un buffer pour le mixage final
+      const sampleRate = this.audioContext.sampleRate;
+      const totalSamples = Math.ceil(totalDuration * sampleRate);
+      const mixBuffer = this.audioContext.createBuffer(
+        2, // stéréo
+        totalSamples,
+        sampleRate
+      );
+      
+      // Paramètres de crossfade
+      const defaultCrossfadeDuration = 0.3; // 300ms de crossfade par défaut
+      
+      // Charger et mixer chaque segment
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        logger.debug('Traitement du segment:', i, segment);
+        
+        // Charger le buffer audio
+        const buffer = await this.fetchAudioBuffer(segment.audioUrl);
+        
+        // Calculer les paramètres de crossfade
+        const nextSegment = i < segments.length - 1 ? segments[i + 1] : null;
+        const crossfadeOut = nextSegment ? 
+          Math.min(defaultCrossfadeDuration, (segment.duration * 0.2)) : 0;
+        
+        const fadeIn = segment.fadeIn || 0.1;
+        const fadeOut = segment.fadeOut || crossfadeOut;
+        
+        logger.debug('Paramètres de fondu:', { fadeIn, fadeOut });
+        
+        // Calculer les positions en échantillons
+        const startSample = Math.floor(segment.startTime * sampleRate);
+        const segmentSamples = buffer.length;
+        
+        // Mixer le segment dans le buffer principal
+        for (let channel = 0; channel < 2; channel++) {
+          const mixChannelData = mixBuffer.getChannelData(channel);
+          const segmentChannelData = buffer.getChannelData(Math.min(channel, buffer.numberOfChannels - 1));
+          
+          for (let s = 0; s < segmentSamples; s++) {
+            const targetSample = startSample + s;
+            if (targetSample >= totalSamples) break;
+            
+            // Appliquer les fondus
+            let gain = segment.volume || 1.0;
+            
+            // Fondu d'entrée
+            if (s < fadeIn * sampleRate) {
+              gain *= s / (fadeIn * sampleRate);
+            }
+            
+            // Fondu de sortie
+            if (s > segmentSamples - (fadeOut * sampleRate)) {
+              gain *= (segmentSamples - s) / (fadeOut * sampleRate);
+            }
+            
+            // Mixer avec le contenu existant (addition)
+            mixChannelData[targetSample] += segmentChannelData[s] * gain;
+          }
+        }
+      }
+      
+      // Normaliser le buffer pour éviter l'écrêtage
+      this.normalizeBuffer(mixBuffer);
+      
+      // Créer un blob avec le résultat final
+      const finalBuffer = await this.exportToBuffer(mixBuffer);
+      const audioBlob = new Blob([finalBuffer], { type: 'audio/wav' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
       logger.info('Mixage terminé avec succès');
+      logger.info('URL audio générée:', audioUrl);
       logger.groupEnd();
 
       return {
-        audioUrl: firstSegment.audioUrl,
-        duration: firstSegment.duration,
-        segments: [firstSegment]
+        audioUrl,
+        duration: totalDuration,
+        segments
       };
     } catch (error) {
       logger.error('Erreur lors du mixage audio:', error);

@@ -482,50 +482,126 @@ export const generateVoiceWithEnvironment = async (text: string, useAI: boolean 
     // 1. Analyser le texte avec Grok pour obtenir les segments
     logger.info('Étape 1: Analyse du texte avec Grok');
     const segments = await analyzeTextEnvironments(text);
-    logger.debug('Segments détectés:', segments);
+    logger.debug('Segments détectés:', segments.length);
     
     // 2. Générer la voix pour chaque segment
     logger.info('Étape 2: Génération des segments audio');
     const audioSegments: AudioSegment[] = [];
     
-    for (const segment of segments) {
-      logger.debug('Traitement du segment:', segment.segment);
+    // Paramètres de transition entre segments
+    const defaultFadeIn = 0.15;  // 150ms de fondu d'entrée
+    const defaultFadeOut = 0.2;  // 200ms de fondu de sortie
+    const defaultCrossfade = 0.3; // 300ms de crossfade entre segments
+    
+    // Calculer les temps de début pour chaque segment
+    let currentTime = 0;
+    const segmentsWithTiming = segments.map((segment, index) => {
+      // Estimer la durée du segment en fonction du nombre de caractères
+      // En moyenne, on parle à environ 15 caractères par seconde pour une voix lente
+      const speechRate = segment.speechRate === 'très lent' ? 10 :
+                         segment.speechRate === 'lent' ? 12 :
+                         segment.speechRate === 'modéré' ? 15 :
+                         segment.speechRate === 'rapide' ? 18 : 13;
+      
+      const estimatedDuration = segment.segment.length / speechRate;
+      
+      // Ajouter des pauses pour la ponctuation
+      const pauseCount = (segment.segment.match(/[.!?…]/g) || []).length;
+      const pauseDuration = pauseCount * 0.3; // 300ms par pause
+      
+      const totalDuration = estimatedDuration + pauseDuration;
+      
+      // Créer un objet avec les informations de timing
+      const segmentWithTiming = {
+        ...segment,
+        startTime: currentTime,
+        duration: totalDuration,
+        fadeIn: segment.fadeIn || defaultFadeIn,
+        fadeOut: segment.fadeOut || defaultFadeOut
+      };
+      
+      // Mettre à jour le temps courant pour le prochain segment
+      // On soustrait le crossfade pour que les segments se chevauchent légèrement
+      currentTime += totalDuration - defaultCrossfade;
+      
+      return segmentWithTiming;
+    });
+    
+    // Générer l'audio pour chaque segment
+    for (let i = 0; i < segmentsWithTiming.length; i++) {
+      const segment = segmentsWithTiming[i];
+      const prevSegment = i > 0 ? segmentsWithTiming[i - 1] : null;
+      const nextSegment = i < segmentsWithTiming.length - 1 ? segmentsWithTiming[i + 1] : null;
+      
+      logger.debug(`Traitement du segment ${i+1}/${segmentsWithTiming.length}:`, segment.segment);
       logger.debug('Émotion détectée:', segment.emotionalTone);
       logger.debug('Environnement détecté:', segment.environment);
       
-      // Construire le SSML pour ce segment
-      const ssml = `<speak>
-        <prosody rate="${segment.speechRate === 'très lent' ? '25%' :
-                      segment.speechRate === 'lent' ? '35%' :
-                      segment.speechRate === 'modéré' ? '45%' :
-                      segment.speechRate === 'rapide' ? '55%' :
-                      '40%'}"
-                  volume="${segment.volume === 'doux' ? '-2dB' :
-                         segment.volume === 'fort' ? '+4dB' :
-                         '+0dB'}">
-          ${segment.segment}
-        </prosody>
-      </speak>`;
-      
-      logger.debug('SSML généré:', ssml);
-
-      // Obtenir les paramètres vocaux basés sur l'émotion
-      const voiceSettings = getVoiceSettings(segment.emotionalTone, {
+      // Ajuster les paramètres vocaux en fonction du contexte
+      let analysis: TextAnalysis = {
         intensity: 0.7,
         rhythm: 0.5,
         pause: false,
-        isQuestion: false,
-        isExclamation: false,
+        isQuestion: segment.segment.includes('?'),
+        isExclamation: segment.segment.includes('!'),
         emotionalProgression: 0.5,
         contextualMood: 'intimacy',
         emphasis: [],
         tonalVariation: 0.3
-      });
+      };
       
+      // Ajuster l'analyse en fonction des segments voisins pour une transition plus fluide
+      if (prevSegment) {
+        // Transition depuis le segment précédent
+        analysis.emotionalProgression = 0.7; // Augmenter la progression émotionnelle
+        
+        // Ajuster l'intensité en fonction de l'émotion précédente
+        if (prevSegment.emotionalTone === 'intense' || prevSegment.emotionalTone === 'excite') {
+          analysis.intensity = 0.8;
+        } else if (prevSegment.emotionalTone === 'doux' || prevSegment.emotionalTone === 'murmure') {
+          analysis.intensity = 0.5;
+        }
+      }
+      
+      // Construire le SSML pour ce segment avec des transitions fluides
+      let ssml = `<speak>\n`;
+      
+      // Ajouter une respiration au début si c'est le premier segment ou après une pause
+      if (i === 0 || (prevSegment && prevSegment.segment.match(/[.!?…]$/))) {
+        ssml += `<break time="200ms"/>\n`;
+      }
+      
+      // Ajouter la prosodie avec des transitions douces
+      ssml += `<prosody rate="${segment.speechRate === 'très lent' ? '25%' :
+                           segment.speechRate === 'lent' ? '35%' :
+                           segment.speechRate === 'modéré' ? '45%' :
+                           segment.speechRate === 'rapide' ? '55%' :
+                           '40%'}"
+                       volume="${segment.volume === 'doux' ? '-2dB' :
+                              segment.volume === 'fort' ? '+4dB' :
+                              '+0dB'}">\n`;
+      
+      // Ajouter le texte avec des respirations naturelles
+      ssml += addBreathingAndPauses(segment.segment, segment.emotionalTone, analysis);
+      
+      // Fermer les balises
+      ssml += `\n</prosody>\n`;
+      
+      // Ajouter une respiration à la fin si c'est le dernier segment
+      if (i === segmentsWithTiming.length - 1) {
+        ssml += `<break time="300ms"/>\n`;
+      }
+      
+      ssml += `</speak>`;
+      
+      logger.debug('SSML généré:', ssml);
+
+      // Obtenir les paramètres vocaux basés sur l'émotion
+      const voiceSettings = getVoiceSettings(segment.emotionalTone, analysis);
       logger.debug('Paramètres vocaux:', voiceSettings);
 
       try {
-        logger.info('Appel à l\'API ElevenLabs pour le segment');
+        logger.info(`Appel à l'API ElevenLabs pour le segment ${i+1}/${segmentsWithTiming.length}`);
         // Générer l'audio pour ce segment
         const response = await axiosInstance.post(
           API_URL,
@@ -554,10 +630,10 @@ export const generateVoiceWithEnvironment = async (text: string, useAI: boolean 
         const audioUrl = URL.createObjectURL(audioBlob);
         logger.debug('URL du blob audio créée:', audioUrl);
 
-        // Ajouter le segment à la liste
+        // Ajouter le segment à la liste avec les paramètres de transition
         audioSegments.push({
-          startTime: segment.startTime || 0,
-          duration: segment.duration || 0,
+          startTime: segment.startTime,
+          duration: segment.duration,
           audioUrl,
           environment: segment.environment,
           volume: segment.volume === 'doux' ? 0.7 :
@@ -567,9 +643,9 @@ export const generateVoiceWithEnvironment = async (text: string, useAI: boolean 
           fadeOut: segment.fadeOut
         });
         
-        logger.debug('Segment audio ajouté à la liste');
+        logger.debug(`Segment audio ${i+1}/${segmentsWithTiming.length} ajouté à la liste`);
       } catch (segmentError) {
-        logger.error('Erreur lors de la génération du segment audio:', segmentError);
+        logger.error(`Erreur lors de la génération du segment audio ${i+1}/${segmentsWithTiming.length}:`, segmentError);
         if (axios.isAxiosError(segmentError)) {
           logger.error('Réponse de l\'API pour le segment:', segmentError.response?.data);
           logger.error('Status pour le segment:', segmentError.response?.status);
