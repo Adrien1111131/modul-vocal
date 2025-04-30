@@ -14,6 +14,74 @@ const App: React.FC = () => {
   const [detectedEnvironment, setDetectedEnvironment] = useState<string>('default');
   const [detectedEmotion, setDetectedEmotion] = useState<string>('sensuel');
 
+  // Vérifier les variables d'environnement au chargement
+  useEffect(() => {
+    const checkEnvironmentVariables = () => {
+      const missingVars = [];
+      
+      if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
+        missingVars.push('VITE_ELEVENLABS_API_KEY');
+      }
+      if (!import.meta.env.VITE_ELEVENLABS_VOICE_ID) {
+        missingVars.push('VITE_ELEVENLABS_VOICE_ID');
+      }
+      if (!import.meta.env.VITE_GROK_API_KEY) {
+        missingVars.push('VITE_GROK_API_KEY');
+      }
+
+      if (missingVars.length > 0) {
+        const errorMsg = `Variables d'environnement manquantes : ${missingVars.join(', ')}`;
+        logger.error(errorMsg);
+        setError(errorMsg);
+        return false;
+      }
+
+      logger.info('Variables d\'environnement vérifiées avec succès');
+      return true;
+    };
+
+    // Vérifier le support de l'API Web Audio
+    const checkWebAudioSupport = () => {
+      if (!window.AudioContext && !(window as any).webkitAudioContext) {
+        const errorMsg = 'Web Audio API non supportée par ce navigateur';
+        logger.error(errorMsg);
+        setError(errorMsg);
+        return false;
+      }
+      
+      logger.info('Web Audio API supportée');
+      return true;
+    };
+
+    // Vérifier le contexte sécurisé
+    const checkSecureContext = () => {
+      if (!window.isSecureContext) {
+        const errorMsg = 'L\'application doit être exécutée dans un contexte sécurisé (HTTPS)';
+        logger.error(errorMsg);
+        setError(errorMsg);
+        return false;
+      }
+      
+      logger.info('Contexte sécurisé vérifié');
+      return true;
+    };
+
+    // Effectuer toutes les vérifications
+    const envOk = checkEnvironmentVariables();
+    const audioOk = checkWebAudioSupport();
+    const secureOk = checkSecureContext();
+
+    if (envOk && audioOk && secureOk) {
+      logger.info('Toutes les vérifications système sont passées avec succès');
+      console.log('Environnement de production:', {
+        nodeEnv: import.meta.env.MODE,
+        baseUrl: import.meta.env.BASE_URL,
+        userAgent: window.navigator.userAgent,
+        isSecureContext: window.isSecureContext
+      });
+    }
+  }, []);
+
   useEffect(() => {
     logger.group('État de l\'application');
     logger.debug('État actuel:', {

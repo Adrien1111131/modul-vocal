@@ -28,12 +28,53 @@ class AudioMixerService {
 
   private initAudioContext() {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      this.masterGainNode = this.audioContext.createGain();
-      this.masterGainNode.connect(this.audioContext.destination);
-      logger.info('Contexte audio du mixeur initialisé');
+      // Vérifier si le contexte audio est déjà initialisé
+      if (this.audioContext) {
+        logger.info('Contexte audio déjà initialisé');
+        return;
+      }
+
+      // Vérifier si l'API Web Audio est disponible
+      if (!window.AudioContext && !(window as any).webkitAudioContext) {
+        throw new Error('Web Audio API non supportée par ce navigateur');
+      }
+
+      // Créer le contexte audio avec gestion des erreurs détaillée
+      try {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        logger.info('Contexte audio créé avec succès');
+      } catch (contextError) {
+        logger.error('Erreur lors de la création du contexte audio:', contextError);
+        throw contextError;
+      }
+
+      // Créer et connecter le nœud de gain principal
+      try {
+        this.masterGainNode = this.audioContext.createGain();
+        this.masterGainNode.connect(this.audioContext.destination);
+        logger.info('Nœud de gain principal créé et connecté');
+      } catch (gainError) {
+        logger.error('Erreur lors de la création du nœud de gain:', gainError);
+        throw gainError;
+      }
+
+      // Vérifier l'état du contexte audio
+      logger.info('État du contexte audio:', this.audioContext.state);
+      if (this.audioContext.state === 'suspended') {
+        logger.warn('Le contexte audio est suspendu, une interaction utilisateur peut être nécessaire');
+      }
+
+      logger.info('Contexte audio du mixeur initialisé avec succès');
     } catch (error) {
       logger.error('Erreur lors de l\'initialisation du contexte audio:', error);
+      console.error('Détails de l\'erreur d\'initialisation:', {
+        error,
+        audioContext: this.audioContext,
+        masterGainNode: this.masterGainNode,
+        userAgent: window.navigator.userAgent,
+        isSecureContext: window.isSecureContext
+      });
+      throw error;
     }
   }
 
