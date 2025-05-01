@@ -223,6 +223,25 @@
   color: #666;
 }
 
+.audio-info {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f0f8ff;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.environment-info, .emotion-info {
+  margin-top: 0.5rem;
+  font-style: italic;
+  color: #666;
+}
+
+.emotion-info {
+  color: #ff69b4;
+  font-weight: bold;
+}
+
 @media (max-width: 768px) {
   .app {
     padding: 1rem;
