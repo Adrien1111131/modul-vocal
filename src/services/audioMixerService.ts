@@ -39,7 +39,21 @@ class AudioMixerService {
 
   private async fetchAudioBuffer(url: string): Promise<AudioBuffer> {
     try {
+      // Vérifier si l'URL est relative et commence par /
+      if (url.startsWith('/') && !url.startsWith('//')) {
+        // Convertir en URL relative à la base de l'application
+        const baseUrl = window.location.origin;
+        url = `${baseUrl}${url}`;
+        logger.debug('URL audio convertie en absolue:', url);
+      }
+      
+      logger.debug('Chargement de l\'audio depuis:', url);
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status} - ${response.statusText}`);
+      }
+      
       const arrayBuffer = await response.arrayBuffer();
       return await this.audioContext!.decodeAudioData(arrayBuffer);
     } catch (error) {

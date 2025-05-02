@@ -6,6 +6,11 @@ import { analyzeTextEnvironments } from './services/grokService';
 import { logger } from './config/development';
 import './App.css';
 
+// Vérification des variables d'environnement
+const ELEVENLABS_VOICE_ID = import.meta.env.VITE_ELEVENLABS_VOICE_ID;
+const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY;
+const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY;
+
 const App: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -13,7 +18,21 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [detectedEnvironment, setDetectedEnvironment] = useState<string>('default');
   const [detectedEmotion, setDetectedEmotion] = useState<string>('sensuel');
+  const [envError, setEnvError] = useState<string | null>(null);
   // État de l'application
+
+  // Vérification des variables d'environnement au chargement
+  useEffect(() => {
+    // Vérifier les variables d'environnement requises
+    if (!ELEVENLABS_VOICE_ID || !ELEVENLABS_API_KEY) {
+      const errorMsg = "Variables d'environnement manquantes: VITE_ELEVENLABS_VOICE_ID ou VITE_ELEVENLABS_API_KEY. Veuillez configurer ces variables dans les paramètres de Vercel.";
+      setEnvError(errorMsg);
+      logger.error(errorMsg);
+      console.error(errorMsg);
+    } else {
+      setEnvError(null);
+    }
+  }, []);
 
   useEffect(() => {
     logger.group('État de l\'application');
@@ -22,11 +41,12 @@ const App: React.FC = () => {
       audioUrl,
       isLoading,
       error,
+      envError,
       detectedEnvironment,
       detectedEmotion
     });
     logger.groupEnd();
-  }, [inputText, audioUrl, isLoading, error, detectedEnvironment, detectedEmotion]);
+  }, [inputText, audioUrl, isLoading, error, envError, detectedEnvironment, detectedEmotion]);
 
   const handleTextChange = (text: string) => {
     logger.debug('Changement de texte:', text);
@@ -146,36 +166,55 @@ const App: React.FC = () => {
     <div className="app">
       <h1>Générateur de Voix Érotique</h1>
       
-      <div className="app-container">
-        <div className="controls-section">
-          <TextInput onTextChange={handleTextChange} />
-          <button 
-            onClick={handleGenerateVoice}
-            disabled={isLoading || !inputText.trim()}
-            className="generate-button"
-          >
-            {isLoading ? 'Génération en cours...' : 'Générer la Voix'}
-          </button>
-          {error && (
-            <div className="error-message">
-              {error}
-            </div>
-          )}
+      {envError ? (
+        <div className="env-error">
+          <h2>Erreur de configuration</h2>
+          <p>{envError}</p>
+          <div className="env-help">
+            <h3>Comment résoudre ce problème :</h3>
+            <ol>
+              <li>Connectez-vous à votre compte Vercel</li>
+              <li>Accédez à votre projet</li>
+              <li>Cliquez sur "Settings" (Paramètres)</li>
+              <li>Allez dans la section "Environment Variables" (Variables d'environnement)</li>
+              <li>Ajoutez les variables VITE_ELEVENLABS_VOICE_ID et VITE_ELEVENLABS_API_KEY avec leurs valeurs</li>
+              <li>Cliquez sur "Save" (Enregistrer)</li>
+              <li>Redéployez votre application</li>
+            </ol>
+            <p>Pour plus d'informations, consultez le fichier README.md du projet.</p>
+          </div>
         </div>
-        <div className="player-section">
-          <VoicePlayer 
-            audioUrl={audioUrl} 
-            environment={detectedEnvironment} // Passer l'environnement détecté
-            emotion={detectedEmotion}
-          />
-          {audioUrl && (
-            <div className="audio-info">
-              Audio généré avec succès
-            </div>
-          )}
+      ) : (
+        <div className="app-container">
+          <div className="controls-section">
+            <TextInput onTextChange={handleTextChange} />
+            <button 
+              onClick={handleGenerateVoice}
+              disabled={isLoading || !inputText.trim()}
+              className="generate-button"
+            >
+              {isLoading ? 'Génération en cours...' : 'Générer la Voix'}
+            </button>
+            {error && (
+              <div className="error-message">
+                {error}
+              </div>
+            )}
+          </div>
+          <div className="player-section">
+            <VoicePlayer 
+              audioUrl={audioUrl} 
+              environment={detectedEnvironment} // Passer l'environnement détecté
+              emotion={detectedEmotion}
+            />
+            {audioUrl && (
+              <div className="audio-info">
+                Audio généré avec succès
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      
+      )}
     </div>
   );
 };
