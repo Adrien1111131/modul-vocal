@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Placeholder</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        .placeholder {
+            width: 500px;
+            height: 300px;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .placeholder h2 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+        .placeholder p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .placeholder .environment {
+            font-weight: bold;
+            color: #ffeb3b;
+        }
+        .placeholder .emotion {
+            font-weight: bold;
+            color: #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="placeholder">
+        <h2>Image Placeholder</h2>
+        <p>Environnement: <span class="environment" id="environment">chambre</span></p>
+        <p>Émotion: <span class="emotion" id="emotion">sensuel</span></p>
+        <p>Cette image est générée localement car l'API de génération d'images n'est pas disponible.</p>
+    </div>
+
+    <script>
+        // Récupérer les paramètres de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const environment = urlParams.get('environment') || 'chambre';
+        const emotion = urlParams.get('emotion') || 'sensuel';
+        
+        // Mettre à jour les éléments HTML
+        document.getElementById('environment').textContent = environment;
+        document.getElementById('emotion').textContent = emotion;
+        
+        // Mettre à jour le titre
+        document.title = `Image: ${environment} - ${emotion}`;
+    </script>
+</body>
+</html>
